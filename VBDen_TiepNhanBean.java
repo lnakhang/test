@@ -28,9 +28,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
 import javax.faces.bean.ManagedBean;
 import javax.faces.bean.ManagedProperty;
 import javax.faces.bean.ViewScoped;
@@ -41,6 +41,7 @@ import javax.faces.event.ValueChangeEvent;
 import javax.faces.model.SelectItem;
 
 
+
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.lang3.time.StopWatch;
 import org.apache.commons.mail.EmailException;
@@ -49,6 +50,7 @@ import org.icefaces.ace.component.fileentry.FileEntryEvent;
 import org.icefaces.ace.component.fileentry.FileEntryResults;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 
 
 import com.cusc.hcdt.facade.DmCachThucXuLyFacade;
@@ -115,6 +117,8 @@ import com.liferay.portal.service.OrganizationLocalServiceUtil;
 import com.liferay.portal.service.UserLocalServiceUtil;
 
 import org.apache.commons.lang3.StringUtils;
+
+import sun.util.logging.resources.logging;
 
 /**
  * @author lqthai
@@ -364,23 +368,26 @@ public class VBDen_TiepNhanBean extends BaseBean implements Serializable {
 						.toString());
 				props.setUPLOAD_PATH(loader.getParams().get("vPath_vbden")
 						.toString());
-
+				
+				long parentOrgId = userUtil.getParentOrgId(getCompanyId());
+				if (!listDvUser.contains(parentOrgId)) {
+					listDvUser.add(parentOrgId);
+				}
 				// Lấy ds các danh mục
 				props.setDsLinhVucVb(new ArrayList<Map<String, Object>>());
 				props.setDsDoKhan(new ArrayList<DmDoKhanModel>());
 				props.setDsDoMat(new ArrayList<DmDoMatModel>());
 
 				props.setDsDoKhan(objDmDoKhanFacade.getDsDoKhan(companyid,
-						getOrgId()));
+						getListDvUser()));
 				props.setDsDoMat(objDmDoMatFacade.getDsDoMat(companyid,
-						getOrgId()));
+						getListDvUser()));
 
 				propsSoVanBan.setDsSoVanBan(objDmSoVanBanFacade
 						.getDsSoVbTheoNvb(1, companyid, getOrgId(),
 								getListDvUser()));
-				propsLoaiVb
-						.setDsLoaiVanBan(objDmLoaiVanBanFacade.getDsLoaiVanBan(
-								companyid, getOrgId(), getListDvUser()));
+				propsLoaiVb.setDsLoaiVanBan(objDmLoaiVanBanFacade.getDsLoaiVanBan(
+								companyid, getListDvUser()));
 				// ds các phòng ban của người dùng đang đăng nhập (thuộc đơn vị
 				// đã cấu hình)
 				props.setDsPhongBan(userUtil
@@ -472,7 +479,7 @@ public class VBDen_TiepNhanBean extends BaseBean implements Serializable {
 		setOrgId(Long.parseLong(ev.getNewValue().toString()));
 		propsDonVi.setOrgId(getOrgId());
 		propsLoaiVb.setDsLoaiVanBan(objDmLoaiVanBanFacade.getDsLoaiVanBan(
-				companyid, getOrgId(), getListDvUser()));
+				companyid, getListDvUser()));
 		propsDonVi.setDsDonVi(objDmDonViFacade.getDsDonVi(companyid,
 				getOrgId(), getListDvUser()));
 	}
@@ -483,19 +490,10 @@ public class VBDen_TiepNhanBean extends BaseBean implements Serializable {
 			setOrgName(userUtil.getOrganization(getOrgId()).getName());
 			_log.info("Id: " + getOrgId() + " Name: " + getOrgName());
 			propsLoaiVb.setOrganizationid(getOrgId());
-			propsSoVanBan.setOrganizationid(getOrgId());
+			propsSoVanBan.setOrganizationid(getListDvUser().get(0));
 			propsLinhVuc.setOrganizationid(getOrgId());
 			propsCachThucXuLy.setOrganizationid(getOrgId());
 			propsDonVi.setOrgId(getOrgId());
-			propsLoaiVb.setDsLoaiVanBan(objDmLoaiVanBanFacade.getDsLoaiVanBan(
-					companyid, getOrgId(), getListDvUser()));
-			propsSoVanBan.setDsSoVanBan(objDmSoVanBanFacade.getDsSoVbTheoNvb(1,
-					companyid, getOrgId(), getListDvUser()));
-			props.setDsDoKhan(objDmDoKhanFacade.getDsDoKhan(companyid,
-					getOrgId()));
-			props.setDsDoMat(objDmDoMatFacade.getDsDoMat(companyid, getOrgId()));
-			props.setDsPhongBan(userUtil.getDsPhongBanCuaNguoiDungTheoDonVi(
-					getOrgId(), userId));
 
 			// Lây ds người dùng thuộc đơn vị (đơn vị lấy từ cấu hình cá nhân
 			// của người dùng)
@@ -517,18 +515,19 @@ public class VBDen_TiepNhanBean extends BaseBean implements Serializable {
 
 				setListDonVi(userUtil.getDsDonViTheoNguoiDung(getUserId()));
 			}
-
-			List<Long> dsOrgId = new ArrayList<Long>();
-			if (getListDonVi() != null) {
-				for (Organization o : getListDonVi()) {
-					dsOrgId.add(o.getOrganizationId());
-				}
-			}
+			
 			propsLinhVuc.setDsLinhVuc(objDmLinhVucFacade.getDsLinhVuc("{}",
-					companyid, dsOrgId));
+					companyid, getListDvUser()));
 			propsCachThucXuLy.setDsCachThucXuLy(objDmCachThucXuLyFacade
-					.getDsCachThucXuLy(companyid, dsOrgId));
-
+					.getDsCachThucXuLy(companyid, getListDvUser()));
+			propsLoaiVb.setDsLoaiVanBan(objDmLoaiVanBanFacade.getDsLoaiVanBan(
+					companyid, getListDvUser()));
+			propsSoVanBan.setDsSoVanBan(objDmSoVanBanFacade.getDsSoVbTheoNvb(1, companyid, getListDvUser().get(0), getListDvUser()));
+			props.setDsDoKhan(objDmDoKhanFacade.getDsDoKhan(companyid, getListDvUser()));
+			props.setDsDoMat(objDmDoMatFacade.getDsDoMat(companyid, getListDvUser()));
+			props.setDsPhongBan(userUtil.getDsPhongBanCuaNguoiDungTheoDonVi(
+					getOrgId(), userId));
+			
 			// Phongban
 			propsDonVi.getDsDonViCungHt().clear();
 			setDonViCungHt(userUtil.getListDonVi(userUtil.getCompanyId()));
@@ -1234,7 +1233,7 @@ public class VBDen_TiepNhanBean extends BaseBean implements Serializable {
 						"Loại văn bản vừa chọn không tồn tại");
 				test = false;
 				propsLoaiVb.setDsLoaiVanBan(objDmLoaiVanBanFacade
-						.getDsLoaiVanBan(companyid, 0, getListDvUser()));
+						.getDsLoaiVanBan(companyid, getListDvUser()));
 			}
 			if (!objDmSoVanBanFacade.isExists(props.getObjVBDenModel()
 					.getSvb_id())) {
@@ -1277,7 +1276,7 @@ public class VBDen_TiepNhanBean extends BaseBean implements Serializable {
 						"Độ khẩn vừa chọn không tồn tại");
 				test = false;
 				props.setDsDoKhan(objDmDoKhanFacade.getDsDoKhan(companyid,
-						getOrgId()));
+						getListDvUser()));
 			}
 			if (!objDmDoMatFacade.isExists(props.getObjVBDenModel().getDm_id())) {
 				props.setSelectMode2(0);
@@ -1285,7 +1284,7 @@ public class VBDen_TiepNhanBean extends BaseBean implements Serializable {
 						"Độ mật vừa chọn không tồn tại");
 				test = false;
 				props.setDsDoMat(objDmDoMatFacade.getDsDoMat(companyid,
-						getOrgId()));
+						getListDvUser()));
 			}
 		}
 		// Bước tiếp nhận là max luân chuyển
@@ -1647,6 +1646,9 @@ public class VBDen_TiepNhanBean extends BaseBean implements Serializable {
 						"Vui lòng chọn cơ quan ban hành");
 				test = false;
 			}
+		}
+		if (canhBaoSoDen) {
+			test = false;
 		}
 
 		// Cơ quan ban hành
@@ -2244,7 +2246,7 @@ public class VBDen_TiepNhanBean extends BaseBean implements Serializable {
 					if (checkSoDen != 1) {
 						props.setSoDen((objVBDenFacade.getMaxSoDenTheoSoVanBan(props.getObjVBDenModel().getSvb_id()) + 1)+ "");
 					} else {
-						props.setSoDen(""+ (Integer.parseInt(props.getSoDen()) + 1));
+						props.setSoDen(soDen + "");
 					}
 					props.setSuaSoDen(false);
 				}
@@ -2848,12 +2850,6 @@ public class VBDen_TiepNhanBean extends BaseBean implements Serializable {
 				props.getObjVBDenModel().setUserid(userId);// userid: Ngươi nhập
 				props.setNguoiChuyenCungHt(props.getObjVBDenModel()
 						.getVbden_nguoinhap());
-				if(props.getObjVBDenModel().getVbden_butphe() != "" && props.getObjVBDenModel().getVbden_butphe() != null){
-					props.getObjVBDenModel().setVbden_butphelanhdao_ngay(props.getObjVBDenModel().getVbden_butphe_ngay());
-					props.getObjVBDenModel().setVbden_butphelanhdao(props.getObjVBDenModel().getVbden_butphe());
-					props.getObjVBDenModel().setVbden_butphelanhdao_userid(props.getObjVBDenModel().getVbden_butphe_userid());
-				}
-				props.setNguoiButPhe(UserUtil.getUserFullName(props.getObjVBDenModel().getVbden_butphe_userid()));
 				props.getObjVBDenModel().setCunght_nguoichuyen(
 						props.getObjVBDenModel().getVbden_nguoinhap());
 				props.getObjVBDenModel().setVbden_nguoinhap(fullName); // fullname:
@@ -3270,19 +3266,7 @@ public class VBDen_TiepNhanBean extends BaseBean implements Serializable {
 			props.setSoDenVitri(objDmSoVanBanFacade.getViTriStt(svbId));
 		}
 	}
-	
-	/**
-	 * 
-	 * @author  hltphat
-	 * @purpose Lấy tên người bút phê dựa theo id
-	 * @date    Dec 28, 2017 :: 9:56:39 AM 
-	 * @param id
-	 * @return
-	 */
-	public String layTenNguoiButPhe(Long id){
-		return UserUtil.getUserFullName(id);
-	}
-	
+
 	/**
 	 * @author lqthai
 	 * @purpose pre Thêm sổ văn bản

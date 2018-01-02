@@ -108,6 +108,9 @@ import com.cusc.hcdt.model.VBDen_LuanChuyenModel;
 import com.cusc.hcdt.model.VBDen_XuLyFilterModel;
 import com.cusc.hcdt.model.VanBanPhoiHopModel;
 import com.cusc.hcdt.props.VBDen_XuLyProps;
+import com.cusc.hcdt.service.mail.Email;
+import com.cusc.hcdt.service.mail.EmailProvider;
+import com.cusc.hcdt.service.mail.EmailService;
 import com.cusc.hcdt.util.CollectionUtil;
 import com.cusc.hcdt.util.ExcelFormatUtils;
 import com.cusc.hcdt.util.HCDTResource;
@@ -305,6 +308,9 @@ public class VBDen_XuLyBean extends BaseBean implements Serializable {
 	private String butPheHientai = null;
 //	private boolean coQuyenLienDonVi;
 //	private boolean coQuyenLienDonViTab;
+	
+	
+	//gửi mail khi chuyển đơn vị
 	/**
 	 * Hàm khởi tạo
 	 * @throws SystemException 
@@ -381,12 +387,18 @@ public class VBDen_XuLyBean extends BaseBean implements Serializable {
 			}
 			
 			props.setListBieuMau	   (objTapTinDinhKemBieuMauFacade.getDsBieuMau(1, getOrganizationId()));
-			props.setListCachThucXuLy  (objDmCachThucXuLyFacade.getDsCachThucXuLy(getCompanyId(), getOrganizationId()));
-			props.setListLoaiVanBan	   (objDmLoaiVanBanFacade.getDsLoaiVanBan(getCompanyId(), 0, getListDvUser()));
+			props.setListCachThucXuLy  (objDmCachThucXuLyFacade.getDsCachThucXuLy(getCompanyId(), getListDvUser()));
 			props.setListSoVanBan	   (objDmSoVanBanFacade.getDsSoVbTheoNvb(1, companyId, 0,getListDvUser()));
-			props.setListDoKhan	  	   (objDmDoKhanFacade.getDsDoKhan(companyId, getOrganizationId()));
-			props.setListDoMat		   (objDmDoMatFacade.getDsDoMat(companyId, getOrganizationId()));
+			props.setListDoKhan	  	   (objDmDoKhanFacade.getDsDoKhan(companyId, getListDvUser()));
+			props.setListDoMat		   (objDmDoMatFacade.getDsDoMat(companyId, getListDvUser()));
 			propsSoVanBan.setDsSoVanBan(objDmSoVanBanFacade.getDsSoVbTheoNvb(1, companyId, 0,getListDvUser()));
+			//thêm orgId cha để load các danh mục chung
+			List<Long> dsOrgId = getListDvUser();
+			Long parentOrgId = objUserUtil.getParentOrgId(getCompanyId());
+			if (!dsOrgId.contains(parentOrgId)) {
+				dsOrgId.add(parentOrgId);
+			}
+			props.setListLoaiVanBan	   (objDmLoaiVanBanFacade.getDsLoaiVanBan(getCompanyId(), 0, dsOrgId));
 			props.setObjVBDen_XuLyFilterModel(new VBDen_XuLyFilterModel()); 
 			/*Xác định phạm vi người dùng thuộc mức độ nào*/
 			butPhe = HcdtRoles.userHasRole(HcdtRole.LanhDaoDonVi,HcdtRole.LanhDaoPhong);
@@ -1521,7 +1533,7 @@ public class VBDen_XuLyBean extends BaseBean implements Serializable {
 			test=false;
 		} else if(!objDmCachThucXuLyFacade.isExists(props.getObjVBDenModel().getCtxl_id())){
 			test = false;
-			props.setListCachThucXuLy(objDmCachThucXuLyFacade.getDsCachThucXuLy(getCompanyId(), getOrganizationId()));
+			props.setListCachThucXuLy(objDmCachThucXuLyFacade.getDsCachThucXuLy(getCompanyId(), getListDvUser()));
 			Validator.showErrorMessage(getPortletId(), "frm:selCachThucXuLy", "Cách thức xử lý vừa chọn đã bị xóa");
 		}
 		
@@ -1758,20 +1770,6 @@ public class VBDen_XuLyBean extends BaseBean implements Serializable {
 	}
 	
 	/**
-	 * 
-	 * @author  hltphat
-	 * @purpose 
-	 * @date    Dec 28, 2017 :: 1:23:27 PM 
-	 * @return
-	 */
-	public boolean kiemTraQuyenSua(Long id){
-		if(id == organizationId){
-			return true;
-		}
-		return false;
-	}
-	
-	/**
 	 * @author  ltbao
 	 * @purpose Xem chi tiết văn bản xử lý
 	 * @date    May 23, 2014 :: 1:11:42 PM 
@@ -1782,6 +1780,8 @@ public class VBDen_XuLyBean extends BaseBean implements Serializable {
 		log.info("actionXemVanBan");
 		try{
 			tabIndex=0;
+			dakhoitao = false;
+			props.setHienThiGuiMail(false);
 			Object obj=evt.getComponent().getAttributes().get("obj");
 			if(obj!=null){
 				Map<String,Object> map=(Map<String,Object>)obj;
@@ -2085,10 +2085,6 @@ public class VBDen_XuLyBean extends BaseBean implements Serializable {
 		if(map != null && map.get("vbden_butphe_userid") != null){
 			map.put("vbden_butphe_fullname", UserUtil.getUserFullName(Long.parseLong(map.get("vbden_butphe_userid").toString())));
 		}
-		if(map != null && map.get("vbden_butphelanhdao_userid") != null){
-			map.put("vbden_butphelanhdao_fullname", UserUtil.getUserFullName(Long.parseLong(map.get("vbden_butphelanhdao_userid").toString())));
-		}
-		log.info("Map: "+ new Gson().toJson(map));
 		return map==null?new HashMap<String, Object>():map;
 	}
 	
@@ -2103,8 +2099,7 @@ public class VBDen_XuLyBean extends BaseBean implements Serializable {
 	public void xuLyVanBanDen(AjaxBehaviorEvent evt) throws Exception {
 		log.info("luuThongTinXuLy");
 		if(xuLyVanBanValidator()){
-			UserUtil uu = new UserUtil();
-			String noiDungXuLy = "";
+			
 			//set lại dữ liệu lưu trữ. nếu không sẽ mất dữ liệu lưu trữ nếu chuyển hoặc hoàn tất xử lý
 			props.getObjVBDen_LuanChuyenModel().setVbden_lc_thongtin_lt(props.getObjXemVanBan().get("vbden_thongtin_lt").toString());
 			props.getObjVBDen_LuanChuyenModel().setVbden_lc_trangthai_lt(Boolean.parseBoolean(props.getObjXemVanBan().get("vbden_trangthai_lt").toString()));
@@ -2128,7 +2123,6 @@ public class VBDen_XuLyBean extends BaseBean implements Serializable {
 					}					
 					/*END   30.07.2014*/
 					if(props.getLoaiPhoBien()==IContanst.PVPB_TATCA){
-						noiDungXuLy = "Phổ biến cho tất cả"; 
 						props.getObjVBDen_LuanChuyenModel().setVbden_lc_pb_canhan("{}");
 						props.getObjVBDen_LuanChuyenModel().setVbden_lc_pb_phongban("");
 						if(props.isHoanThanhXuLyToanVanBan()){
@@ -2153,7 +2147,6 @@ public class VBDen_XuLyBean extends BaseBean implements Serializable {
 									getOrgNotification());
 						}
 					} else if(props.getLoaiPhoBien()==IContanst.PVPB_NOIBO){
-						noiDungXuLy = "Phổ biến cho nội bộ phòng: " + uu.getOrganization(getOrganizationId()).getName(); 
 						props.getObjVBDen_LuanChuyenModel().setVbden_lc_pb_canhan("{}");
 						props.getObjVBDen_LuanChuyenModel().setVbden_lc_pb_phongban(getOrganizationId()+"");
 						if(props.isHoanThanhXuLyToanVanBan()){
@@ -2181,16 +2174,6 @@ public class VBDen_XuLyBean extends BaseBean implements Serializable {
 					} else if(props.getLoaiPhoBien()==IContanst.PVPB_NGUOINHAN){
 						props.getObjVBDen_LuanChuyenModel().setVbden_lc_pb_canhan(getListPhoBien());
 						props.getObjVBDen_LuanChuyenModel().setVbden_lc_pb_phongban("");
-						noiDungXuLy = "Phổ biến đến: ";
-						int i = 0;
-						for(Map map:props.getListPhoBien()){
-							if(Boolean.parseBoolean(map.get("chon").toString()) && i == 0){
-								noiDungXuLy += uu.getUserFullName(Long.parseLong(map.get("userid").toString()));
-							}else if(Boolean.parseBoolean(map.get("chon").toString())){
-								noiDungXuLy += ", " + uu.getUserFullName(Long.parseLong(map.get("userid").toString()));
-							}
-							i++;
-						}
 						//Gửi thông báo notifications
 						if(props.isHoanThanhXuLyToanVanBan()){
 							log.info("org Notification "+ getOrgNotification());
@@ -2208,21 +2191,18 @@ public class VBDen_XuLyBean extends BaseBean implements Serializable {
 						}
 						
 					} else if(props.getLoaiPhoBien()==IContanst.PVPB_KHONGPHOBIEN){
-						noiDungXuLy = "Không phổ biến";
 						props.getObjVBDen_LuanChuyenModel().setVbden_lc_pb_canhan("{}");
 						props.getObjVBDen_LuanChuyenModel().setVbden_lc_pb_phongban("0");
 					}
 					
 					if(props.isHoanThanhXuLyToanVanBan()){
-						log.info("POINT 1 {}",objBanLienDonViFacade.getObjLienDonViModelLuuXuLy(props.getObjVBDen_LuanChuyenModel().getVbden_id()));
-						log.info("POINT 2 {}", props.getObjVBDen_LuanChuyenModel().getVbden_id());
 						props.getObjVBDen_LuanChuyenModel().setVbden_lc_cn_gannhat(Calendar.getInstance().getTime());
 						props.getObjVBDen_LuanChuyenModel().setVbden_lc_cn_gannhat_userid(objUserUtil.getUserId());
 						props.getObjVBDen_LuanChuyenModel().setVbden_lc_hoanthanh(true);
 						props.getObjVBDen_LuanChuyenModel().setVbden_lc_phongban(phongban_org);
 						objVBDen_XuLyFacade.luuXuLy(props.getObjVBDen_LuanChuyenModel(), 
 								props.getListThemTapTinLuanChuyen(), props.getListXoaTapTinLuanChuyen(), true, thayDoiButPhe);
-						luuKetQuaXuLyCungHeThong(props.getObjVBDen_LuanChuyenModel().getVbden_id(),noiDungXuLy);
+						
 						props.getObjVanBanDen().put("vColorToanVb", loader.getParams().get("vColor_daxuly").toString());
 						props.getObjVanBanDen().put("vColor", loader.getParams().get("vColor_daxuly").toString());
 						props.getObjVanBanDen().put("vbdden_lc_hoanthanh", true);
@@ -2856,16 +2836,13 @@ public class VBDen_XuLyBean extends BaseBean implements Serializable {
 				//if(objVBDenFacade.isExists(vbden_id)){			
 					
 					long vbOrgan = props.getObjVBDenModel().getOrganizationid();
+					
 					//Set lại các danh mục theo 
 					propsLoaiVb.setOrganizationid(vbOrgan);
 					propsSoVanBan.setOrganizationid(vbOrgan);
 					propsLinhVuc.setOrganizationid(vbOrgan);
-					propsLoaiVb.setDsLoaiVanBan(objDmLoaiVanBanFacade.getDsLoaiVanBan(companyId, vbOrgan));
 					//propsSoVanBan.setDsSoVanBan(objDmSoVanBanFacade.getDsSoVanBanTheoDonVi(companyId, vbOrgan));
 					propsSoVanBan.setDsSoVanBan(objDmSoVanBanFacade.getDsSoVbTheoNvb(1, companyId, vbOrgan,getListDvUser()));
-					props.setListDoMat(objDmDoMatFacade.getDsDoMat(companyId, vbOrgan));
-					props.setListDoKhan(objDmDoKhanFacade.getDsDoKhan(companyId, vbOrgan));
-					props.setListCachThucXuLy(objDmCachThucXuLyFacade.getDsCachThucXuLy(companyId, vbOrgan));
 					
 					getListDonVi().clear();
 					if( isCallFromDanhMuc() == false ){
@@ -2880,8 +2857,12 @@ public class VBDen_XuLyBean extends BaseBean implements Serializable {
 							dsOrgId.add(o.getOrganizationId());
 						}
 					}
+					dsOrgId.add(objUserUtil.getParentOrgId(companyId));
+					props.setListDoKhan(objDmDoKhanFacade.getDsDoKhan(companyId, dsOrgId));
 					propsLinhVuc.setDsLinhVuc(objDmLinhVucFacade.getDsLinhVuc("{}", companyId, dsOrgId));
-
+					propsLoaiVb.setDsLoaiVanBan(objDmLoaiVanBanFacade.getDsLoaiVanBan(companyId, dsOrgId));
+					props.setListDoMat(objDmDoMatFacade.getDsDoMat(companyId, dsOrgId));
+					props.setListCachThucXuLy(objDmCachThucXuLyFacade.getDsCachThucXuLy(companyId, dsOrgId));
 					//props.setListLinhVuc(listLinhVuc);
 					
 					
@@ -3317,15 +3298,12 @@ public class VBDen_XuLyBean extends BaseBean implements Serializable {
 			Object obj=evt.getComponent().getAttributes().get("obj");
 			props.setGuiMailChuyenXuLyBoSung(false);
 			props.setTxtDsEmailNhanXuLyBoSung(""); 
-			
 			if(obj != null){
-				
 				List<Map<String, Object>> listChuyenXuLyBoSung = new ArrayList<Map<String,Object>>();;
 				
 				int index = props.getListLuanChuyen().indexOf(obj);					
-				
 				//Lấy danh sách phối hợp xử lý
-				if(index < (props.getListLuanChuyen().size()-1) ){	
+				if(index < (props.getListLuanChuyen().size()-1) ){
 					Map<String,Object> objNextLc = props.getListLuanChuyen().get(index+1);					
 					lcIdXuLyBoSungTmp = Long.parseLong(objNextLc.get("vbden_lc_id").toString());		
 					long userIdNext = Long.parseLong(objNextLc.get("vbden_lc_xlchinh_userid").toString());
@@ -3335,8 +3313,8 @@ public class VBDen_XuLyBean extends BaseBean implements Serializable {
 					//log.info("getListChuyenXuLy {}", props.getListChuyenXuLy());
 					
 					pmGetDsChuyenXuLy();
-					if(props.getListChuyenXuLy() != null && !props.getListChuyenXuLy().isEmpty()){						
-						for( Map<String,Object> mapUser : props.getListChuyenXuLy() ){						
+					if(props.getListChuyenXuLy() != null && !props.getListChuyenXuLy().isEmpty()){
+						for( Map<String,Object> mapUser : props.getListChuyenXuLy() ){
 							if( Long.parseLong(mapUser.get("userid").toString()) == userId ||
 									Long.parseLong(mapUser.get("userid").toString()) == userIdNext){ 
 								continue;
@@ -4916,11 +4894,13 @@ public class VBDen_XuLyBean extends BaseBean implements Serializable {
 						props.getListDonViNhanLienDonVi().remove(i);
 						i--;
 						lsSize--;
+						//nếu có chọn ít nhất một đơn vị nhận mới thì hiển thị chọn gửi mail
+						props.setHienThiGuiMail(true);
 					}
 				}
 				
 				//Gửi thông báo đến người nhận
-				pmSortNoiNhanLienDonVi(props.getListNoiNhanLienDonVi()); 
+				pmSortNoiNhanLienDonVi(props.getListNoiNhanLienDonVi());
 			}
 			if(validate){
 				JavascriptContext.addJavascriptCall(FacesContext.getCurrentInstance(), "dialogNoiNhanLienDonVi.hide()");
@@ -4998,6 +4978,14 @@ public class VBDen_XuLyBean extends BaseBean implements Serializable {
 					}
 				}
 			}
+			//kiểm tra lại xem còn đơn vị nhận mới không để hiển thị gửi mail
+			props.setHienThiGuiMail(false);
+			for (DmVanBanLienDonViModel donviChuyen : props.getListNoiNhanLienDonVi()) {
+				if (donviChuyen.getThemMoi()) {
+					props.setHienThiGuiMail(true);
+					break;
+				}
+			}
 		}
 		
 	}
@@ -5005,6 +4993,16 @@ public class VBDen_XuLyBean extends BaseBean implements Serializable {
 	public void actionCapNhatNoiNhanLienDonVi(AjaxBehaviorEvent evt){
 		try {
 			log.info(">>actionCapNhatNoiNhanLienDonVi");
+			StringBuilder dsEmail = new StringBuilder();
+			//tạo danh sách gửi mail
+			if (props.isSendMailChuyenDonVi()) {
+				for(DmVanBanLienDonViModel model : props.getListNoiNhanLienDonVi()) {
+					if(model.getThemMoi()) {
+						dsEmail.append(objVBDen_XuLyFacade.getDSEmail("CBVanThu", model.getLdv_noinhan_organizationid()));
+						dsEmail.append(",");
+					}
+				}
+			}
 			if(props.getListThemNoiNhanLienDonVi().size()==0 && props.getListXoaNoiNhanLienDonVi().size()==0){
 				JavascriptContext.addJavascriptCall(FacesContext.getCurrentInstance(), "thongBao('"+CommonUtils.getBundleValue("vTbCapNhatThanhCong")+"',3);");
 			} else{
@@ -5015,8 +5013,74 @@ public class VBDen_XuLyBean extends BaseBean implements Serializable {
 				
 				JavascriptContext.addJavascriptCall(FacesContext.getCurrentInstance(), "thongBao('"+CommonUtils.getBundleValue("vTbCapNhatThanhCong")+"',3);");
 			}
+			//gửi email
+			if (props.isSendMailChuyenDonVi()) {
+				String[] dsMailTo = dsEmail.toString().split(",");
+				if (dsMailTo.length > 0) {
+					sendMailChuyenDonVi(Long.parseLong(props.getObjXemVanBan().get("vbden_id").toString()), dsMailTo);
+				}
+			}
+			props.setHienThiGuiMail(false);
 		} catch (Exception ex) {
 			log.error("err ", ex);
+		}
+	}
+	
+	private void sendMailChuyenDonVi(final long vbden_id, final String[] dsMailTo){		
+		log.info("<<sendMailChuyenDonVi"); 
+		try {
+			final String tieude = loader.getParams().get("vMailChuyenDonVi_TieuDe").toString().replace("[$doKhan$]", props.getObjXemVanBan().get("dk_ten").toString());
+			
+			final String noidung = loader.getParams().get("vMailChuyenDonVi_NoiDung").toString()
+					.replace("[$donviTiepNhan$]", props.getObjXemVanBan().get("donvixuly").toString())
+					.replace("[$nguoiGui$]", props.getObjXemVanBan().get("vbden_nguoinhap").toString())
+					.replace("[$soHieuGoc$]", props.getObjXemVanBan().get("vbden_sohieugoc").toString())
+					.replace("[$soDen$]", props.getObjXemVanBan().get("vbden_soden").toString())
+					.replace("[$doKhan$]", props.getObjXemVanBan().get("dk_ten").toString())
+					.replace("[$soVanBan$]", props.getObjXemVanBan().get("svb_ten").toString())
+					.replace("[$doMat$]", props.getObjXemVanBan().get("dm_ten").toString())
+					.replace("[$cachthucXuLy$]", props.getObjXemVanBan() != null ? props.getObjXemVanBan().get("ctxl_ten").toString() : "")
+					.replace("[$trichYeu$]", HtmlUtil.escape(props.getObjXemVanBan().get("vbden_trichyeu").toString()));		
+
+			String pathServer = CommonUtils.getPathServer();			
+			String urlVanBanPhoiHop = pathServer + "/" + 
+					objDmLinkFacade.getLinkModelByMa(CommonUtils.Hcdt.TRA_CUU).getLink_giatri() + 
+						"?id=" + vbden_id +
+						"&nhom=" + IContanst.NVB_DEN + 
+						"&email=";
+			
+			String urlXuLyVanBan = pathServer + "/" + 
+					objDmLinkFacade.getLinkModelByMa(CommonUtils.Hcdt.XU_LY_VAN_BAN_DEN).getLink_giatri() + 
+					"?instant=" + vbden_id;
+			
+			for( String mailTo : dsMailTo ){
+				mailTo = mailTo.trim();
+				String noiDungMail = noidung;
+				//noiDungMail = noiDungMail.replace("[$url$]", urlXuLyVanBan);
+				
+				//bỏ comment những dòng sau để mở chức năng gửi mail
+				//log.info("send to {} content {}", mailTo, noiDungMail); 
+//				Email mail = new Email();
+//				mail.setTo(mailTo);				
+//				mail.setSubject(tieude);
+//				mail.setText(noiDungMail);	
+//				mail.setMimeType(EmailService.EMAIL_MINETYPE_TEXT);	
+//				EmailProvider.sendMail(mail);
+				
+				EmailDataProvider emailDataProvider = new EmailDataProvider();
+				DsEmail objEmailModel = new DsEmail();
+				objEmailModel.setEmail_tieude(tieude);
+				objEmailModel.setEmail_noidung(noiDungMail);
+				objEmailModel.setNgay_gui(DateUtils.getCurrentDate());
+				objEmailModel.setEmail_to(mailTo);
+				objEmailModel.setEmail_trangthai(0);
+				objEmailModel.setCompanyid(getCompanyId());
+				emailDataProvider.actionInsertOrEdit(objEmailModel, 3);
+				
+			}
+		} catch (Exception e) { 
+			JavascriptContext.addJavascriptCall(FacesContext.getCurrentInstance(), "thongBao('Gửi email thất bại',3);");
+			log.error("Err sent mail", e);
 		}
 	}
 	
@@ -5052,29 +5116,7 @@ public class VBDen_XuLyBean extends BaseBean implements Serializable {
 		} catch( Exception ex ){
 			log.error("Err preActionThemKqxl ", ex); 
 		}
-	}
-	
-	/**
-	 * 
-	 * @author  hltphat
-	 * @purpose lưu kết quả xử lý
-	 * @date    Dec 29, 2017 :: 8:19:56 AM 
-	 * @param objLienDonVi
-	 */
-	public void luuKetQuaXuLyCungHeThong(long vb_id, String noidung){
-		log.info(">>> luuKetQuaXuLy");
-		try{
-			KetQuaXuLyModel kqxlModel = new KetQuaXuLyModel();
-			//Xác định mode cập nhật Kết quả xử lý
-			kqxlModel.setKqxl_donvinhan_noidung(noidung);
-			kqxlModel.setKqxl_ngaycapnhat(DateUtils.getCurrentDate());
-			kqxlModel.setUserid_capnhat(props.getUserId());
-			kqxlModel.setKqxl_nguoicapnhat(UserUtil.getUserFullName(kqxlModel.getUserid_capnhat()));
-			objKetQuaXuLyFacade.luuKetQuaXuLyTheoIdVB(vb_id, kqxlModel);
-		}catch(Exception ex){
-			log.info("Err luuKetQuaXuLy {}", ex); 
-		}
-	}
+	}	
 	
 	public void preActionSuaKqxl(ActionEvent ae){
 		try{
@@ -5117,6 +5159,7 @@ public class VBDen_XuLyBean extends BaseBean implements Serializable {
 		try{
 			log.info("getModeKqxl {} idxEditKqxl {}", props.getModeKqxl(), idxEditKqxl); 
 			log.info("getKetQuaXuLyModel {}", props.getKetQuaXuLyModel()); 
+			
 			if( isPassValidationKqxl() ){				
 				DmVanBanLienDonViModel ldvModel= null;
 				if(props.getModeKqxl() == IActionMode.ADD_CUNGHT || props.getModeKqxl() == IActionMode.ADD_NGOAIHT){
@@ -5179,6 +5222,7 @@ public class VBDen_XuLyBean extends BaseBean implements Serializable {
 	}
 	
 	public void actionXoaKqxl(ActionEvent ae){
+		log.info("<<actionXoaKqxl");
 		try{
 			Object objLienDonVi = ae.getComponent().getAttributes().get("item");
 			if( objLienDonVi != null ){
